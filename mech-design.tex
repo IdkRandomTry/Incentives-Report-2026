@@ -1,0 +1,1168 @@
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{booktabs,array}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{microtype}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!55!black,
+  citecolor=blue!55!black,
+  urlcolor=blue!55!black
+}
+
+\setlist[itemize]{leftmargin=1.5em}
+\setlist[enumerate]{leftmargin=1.8em}
+\allowdisplaybreaks
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}{Lemma}
+\newtheorem{remark}{Remark}
+\newtheorem{assumption}{Assumption}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\1}{\mathbf{1}}
+\newcommand{\DeltaN}{\Delta_n}
+\newcommand{\pos}[1]{(#1)_+}
+\newcommand{\MSE}{\operatorname{MSE}}
+\newcommand{\Lap}{\operatorname{Laplace}}
+\newcommand{\argmin}{\operatorname*{arg\,min}}
+
+\title{\textbf{Fairness-Augmented Differentially Private Data Acquisition}\\
+}
+\author{Working notes for research development}
+\date{15 November 2026}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Purpose and status of this document}
+
+These notes consolidate the model and derivations developed while studying
+\emph{Optimal and Differentially Private Data Acquisition: Central and Local
+Mechanisms} (the uploaded source paper), and while extending its central
+mechanism-design problem with a two-group fairness penalty.
+
+The main technical objective is to understand whether the paper's efficient
+threshold-sweep algorithm can be extended to the fairness-augmented problem.
+The current derivation suggests that it can: although fairness creates two
+group-specific thresholds, the consistency equation couples them along a
+unique monotone, piecewise-linear path. The outer stationarity condition is
+quartic on each active-set segment.
+
+\paragraph{Status warning.}
+This is developed by AI based on notes and resources supplied. No data or integrity violations intended. Please report any mistakes.
+
+\section{Original data-acquisition model}
+
+\subsection{Estimator and privacy allocation}
+
+The central mechanism considered in the source paper uses a weighted linear
+estimator with Laplace noise:
+\begin{equation}
+  \widehat{\theta}
+  = \sum_{i=1}^n w_i X_i + Z,
+  \qquad
+  Z\sim \Lap(1/\eta),
+  \label{eq:estimator}
+\end{equation}
+where
+\begin{equation}
+  w_i\geq 0,\qquad \sum_{i=1}^n w_i=1,\qquad \eta>0.
+\end{equation}
+The actual privacy loss allocated to participant \(i\) is
+\begin{equation}
+  \epsilon_i^{\mathrm{actual}}=\eta w_i.
+\end{equation}
+It is useful to define
+\begin{equation}
+  y_i=\eta w_i,\qquad S=\sum_i y_i=\eta.
+  \label{eq:yS}
+\end{equation}
+Then
+\begin{equation}
+  w_i=\frac{y_i}{S},\qquad \sum_i y_i=S,
+\end{equation}
+and the Laplace noise has scale \(1/S\) and variance \(2/S^2\).
+Thus \(y_i\) is the actual privacy loss assigned to participant \(i\), while
+\(S\) is the total privacy-loss parameter.
+
+\subsection{Original statistical setting}
+
+In the original common-population setting, observations are drawn from a
+common distribution with mean \(\theta\) and variance \(\sigma^2\). For
+independent observations, the variance of the weighted data component is
+\(\sigma^2\sum_i w_i^2\). Since the estimator is unbiased in that setting,
+its mean-squared error is
+\begin{equation}
+  \MSE
+  =\sigma^2\sum_i w_i^2+\frac{2}{\eta^2}.
+\end{equation}
+In \(y,S\) variables this becomes
+\begin{equation}
+  \MSE
+  =\frac{\sigma^2\sum_i y_i^2+2}{S^2}.
+\end{equation}
+
+\subsection{Virtual costs and payment identity}
+
+Let participant \(i\) have private cost type \(c_i\), with distribution
+\(F_i\) and density \(f_i\). Under the usual regularity assumptions, the
+virtual cost is
+\begin{equation}
+  \psi_i(c_i)=c_i+\frac{F_i(c_i)}{f_i(c_i)}.
+  \label{eq:virtual-cost}
+\end{equation}
+The source paper transforms the platform's expected payment objective into
+an objective involving virtual costs.
+
+For the participant utility and outside option used in the original model,
+the payment identity has the form
+\begin{equation}
+  t_i(c_i)
+  =h_i(c_i)-\operatorname{var}
+   +c_i\epsilon_i(c_i)
+   +\int_{c_i}^{\infty}\epsilon_i(z)\,dz,
+  \label{eq:payment-identity}
+\end{equation}
+where \(h_i(c_i)\) is the relevant interim expected estimation loss and
+\(\operatorname{var}\) denotes the participant's outside-option benchmark
+in the source model. The precise interpretation of \(h_i\) follows the
+source paper's utility specification.
+
+The associated incentive-compatibility condition is that the interim
+privacy allocation is weakly decreasing in the participant's own cost:
+\begin{equation}
+  c_i'\geq c_i
+  \quad\Longrightarrow\quad
+  \epsilon_i(c_i')\leq \epsilon_i(c_i).
+\end{equation}
+The payment identity itself is unchanged by the fairness extension below,
+because fairness is introduced as a platform-level objective term and
+participants' utilities are not changed.
+
+\subsection{Original transformed optimization}
+
+After substituting the payment identity and taking expectations, the
+source paper obtains an objective of the form
+\begin{equation}
+  \E\left[
+    (n+1)\MSE+\sum_i\psi_i(c_i)\epsilon_i(c)
+  \right]-n\operatorname{var}.
+\end{equation}
+The additive constant \(-n\operatorname{var}\) does not affect the
+allocation optimization. In the original common-distribution setting,
+the pointwise optimization is
+\begin{equation}
+  \min_{y_i\geq0}
+  \frac{n+1}{(\sum_i y_i)^2}
+  \left(2+\sigma^2\sum_i y_i^2\right)
+  +\sum_i\psi_i y_i.
+  \label{eq:original-objective}
+\end{equation}
+This objective is not jointly convex in \(y\), because
+\(S=\sum_i y_i\) is endogenous.
+
+\subsection{How the paper obtains its threshold sweep}
+
+The paper fixes \(S=\sum_i y_i\), solves the resulting convex inner
+optimization, and uses the KKT conditions:
+\begin{equation}
+  y_i=
+  \left(
+    \frac{(\ell-\psi_i)S^2}
+    {2(n+1)\sigma^2}
+  \right)_+.
+  \label{eq:paper-kkt}
+\end{equation}
+The normalization \(\sum_i y_i=S\) gives
+\begin{equation}
+  S(\ell)
+  =
+  \frac{2(n+1)\sigma^2}
+       {\sum_i(\ell-\psi_i)_+}.
+  \label{eq:paper-S}
+\end{equation}
+Thus the paper eliminates \(S\) in favour of one scalar threshold
+\(\ell\). The active set changes only when \(\ell\) crosses a sorted virtual
+cost. The paper's Algorithm 1 sweeps these intervals and obtains an
+\(O(n\log n)\) algorithm (sorting plus a linear sweep).
+
+The important structural feature is that every participant has the same
+threshold \(\ell\), shifted only by their virtual cost. The fairness
+extension creates group-specific thresholds, so the one-threshold
+derivation does not transfer verbatim.
+
+\section{Two-group statistical model}
+
+\subsection{Group distributions and target}
+
+Partition participants into two nonempty groups \(A\) and \(B\). Participant
+\(i\) belongs to group \(g(i)\in\{A,B\}\). Assume
+\begin{equation}
+  \E[X_i]=\mu_{g(i)},\qquad
+  \operatorname{Var}(X_i)=\sigma^2,
+  \label{eq:group-moments}
+\end{equation}
+with a common within-group variance \(\sigma^2\). The common-variance
+assumption is deliberate and is used throughout the current derivation.
+
+Let \(p_A,p_B>0\), \(p_A+p_B=1\), and define the target population mean
+\begin{equation}
+  \theta=p_A\mu_A+p_B\mu_B.
+  \label{eq:population-mean}
+\end{equation}
+For weights \(w\), define the estimator's mean
+\begin{equation}
+  m(w)=\sum_i w_i\mu_{g(i)}.
+\end{equation}
+The estimator's variance is
+\begin{equation}
+  V(w,S)=\sigma^2\sum_iw_i^2+\frac{2}{S^2}.
+\end{equation}
+Its group-conditional MSEs are
+\begin{equation}
+  \MSE_A=V(w,S)+(m(w)-\mu_A)^2,
+  \qquad
+  \MSE_B=V(w,S)+(m(w)-\mu_B)^2.
+  \label{eq:group-MSE}
+\end{equation}
+
+\subsection{MSE disparity and fairness penalty}
+
+Subtracting the group MSEs cancels the common variance term:
+\begin{align}
+  D(w)
+  &:=\MSE_A-\MSE_B\\
+  &=(m-\mu_A)^2-(m-\mu_B)^2\\
+  &=(\mu_B-\mu_A)(2m-\mu_A-\mu_B).
+  \label{eq:disparity}
+\end{align}
+Write
+\begin{equation}
+  \Delta=\mu_B-\mu_A.
+\end{equation}
+The platform-level fairness penalty is
+\begin{equation}
+  \mathcal F(w)=\lambda D(w)^2
+  =\lambda\Delta^2(2m(w)-\mu_A-\mu_B)^2,
+  \qquad \lambda\geq0.
+  \label{eq:fairness}
+\end{equation}
+The population MSE is
+\begin{equation}
+  \MSE_{\mathrm{pop}}
+  =p_A\MSE_A+p_B\MSE_B
+  =V(w,S)+(m(w)-\theta)^2.
+  \label{eq:pop-MSE}
+\end{equation}
+
+\paragraph{Interpretation.}
+The fairness term penalizes the squared difference between the two
+groups' conditional MSEs. It is not the same as penalizing the difference
+between group means, nor is it the same as penalizing the variance of
+individual losses. Here it is a deterministic function of the weighted
+estimator mean \(m(w)\).
+
+\subsection{Platform-level fairness only}
+
+The fairness penalty is included in the platform's objective. It is not
+included in participants' utilities. Therefore:
+\begin{itemize}
+  \item the participants' utility model and outside option remain those of
+        the original paper;
+  \item the payment identity remains unchanged;
+  \item the original monotonicity condition on interim privacy allocations
+        remains the relevant IC condition;
+  \item fairness changes the platform's allocation objective, not the
+        participant's direct incentive.
+\end{itemize}
+
+In particular, the transformed objective contains
+\(\lambda\mathcal F\), not \((n+1)\lambda\mathcal F\). The factor \(n+1\)
+multiplies the population MSE because of the original payment-identity
+transformation; it does not multiply a new platform-only fairness term.
+
+\section{Fairness-augmented mechanism-design objective}
+
+Substituting the two-group population MSE and fairness penalty into the
+platform's transformed objective gives
+\begin{equation}
+  \begin{aligned}
+  \min_{w,S}\quad J(w,S)
+  ={}&(n+1)\left[
+       \sigma^2\sum_iw_i^2+\frac{2}{S^2}
+       +(m(w)-\theta)^2
+       \right]\\
+     &+\lambda\Delta^2(2m(w)-\mu_A-\mu_B)^2
+       +S\sum_i\psi_iw_i,
+  \end{aligned}
+  \label{eq:full-w-objective}
+\end{equation}
+subject to
+\begin{equation}
+  w_i\geq0,\qquad \sum_iw_i=1,\qquad S>0.
+\end{equation}
+Here \(\psi_i=\psi_i(c_i)\) is the virtual cost at the reported type
+profile. The pointwise optimization is performed for each profile of
+virtual costs.
+
+Using \(y_i=Sw_i\), \(S=\sum_i y_i\), the same objective is
+\begin{equation}
+  \begin{aligned}
+  J(y,S)
+  ={}&(n+1)\left[
+      \frac{\sigma^2\sum_i y_i^2}{S^2}
+      +\frac{2}{S^2}
+      +\left(\frac{\sum_i\mu_{g(i)}y_i}{S}-\theta\right)^2
+      \right]\\
+    &+\lambda\Delta^2
+      \left(
+      2\frac{\sum_i\mu_{g(i)}y_i}{S}
+      -\mu_A-\mu_B
+      \right)^2
+      +\sum_i\psi_i y_i,
+  \end{aligned}
+  \label{eq:full-y-objective}
+\end{equation}
+with \(y_i\geq0\) and \(S=\sum_i y_i>0\).
+
+\section{Fixed-\texorpdfstring{$S$}{S} optimization and KKT conditions}
+
+\subsection{Inner problem}
+
+Fix \(S>0\). Define
+\begin{equation}
+  a_i=\frac{\mu_{g(i)}}{S},
+  \qquad
+  m=a^\top y,
+  \qquad
+  \kappa=\frac{2(n+1)\sigma^2}{S^2}.
+\end{equation}
+The fixed-\(S\) problem is
+\begin{equation}
+  \begin{aligned}
+  \min_{y_i\geq0}\quad&
+  \frac{2(n+1)}{S^2}
+  +\frac{(n+1)\sigma^2}{S^2}\sum_i y_i^2
+  +(n+1)(a^\top y-\theta)^2\\
+  &+\sum_i\psi_i y_i
+  +\lambda\Delta^2
+      (2a^\top y-\mu_A-\mu_B)^2\\
+  \text{subject to}\quad&\sum_i y_i=S.
+  \end{aligned}
+  \label{eq:fixed-S}
+\end{equation}
+
+Define
+\begin{equation}
+  L=2(n+1)+8\lambda\Delta^2,
+  \qquad
+  q_0=-2(n+1)\theta-4\lambda\Delta^2(\mu_A+\mu_B),
+  \label{eq:Lq0}
+\end{equation}
+and
+\begin{equation}
+  q(m)=Lm+q_0.
+  \label{eq:q}
+\end{equation}
+
+The Hessian of the objective with respect to \(y\) is
+\begin{equation}
+  H_y
+  =
+  \frac{2(n+1)\sigma^2}{S^2}I
+  +\left(2(n+1)+8\lambda\Delta^2\right)aa^\top.
+  \label{eq:hessian}
+\end{equation}
+For every nonzero \(v\),
+\begin{equation}
+  v^\top H_yv
+  =
+  \frac{2(n+1)\sigma^2}{S^2}\|v\|^2
+  +L(a^\top v)^2>0.
+\end{equation}
+Thus the fixed-\(S\) problem is strictly convex and has a unique global
+minimizer.
+
+\subsection{KKT allocation rule}
+
+Let \(\gamma\) be the multiplier for \(\sum_i y_i=S\), and put
+\(z=-\gamma\). The KKT conditions give
+\begin{equation}
+  \boxed{
+  y_i
+  =
+  \frac{(z-\psi_i-q(m)a_i)_+}{\kappa}.
+  }
+  \label{eq:kkt-y}
+\end{equation}
+The scalar \(z\) is chosen to satisfy the normalization
+\(\sum_i y_i=S\), while \(q\) must be consistent with \(m\).
+
+The fairness term makes the allocation depend on both the participant's
+virtual cost and their group mean. This is why one common threshold no
+longer describes all participants.
+
+\subsection{Monotonicity in own virtual cost and IC}
+
+For fixed \(S\), the objective can be written as
+\[
+G(y)+\sum_i\psi_i y_i,
+\qquad
+\sum_i y_i=S,\quad y_i\geq0,
+\]
+where \(G\) is independent of the reported costs. Comparing global
+minimizers at two values \(\psi_i'<\!\!{}^{\,c}\) is most cleanly done
+using the standard two-optimum argument. If only participant \(i\)'s
+virtual cost rises from \(\psi_i\) to \(\psi_i'>\psi_i\), optimality at
+the two profiles implies
+\begin{equation}
+  (\psi_i'-\psi_i)(y_i'-y_i)\leq0,
+\end{equation}
+so
+\begin{equation}
+  y_i'\leq y_i.
+\end{equation}
+Because \(S\) is fixed, \(\epsilon_i=y_i\), and privacy allocation is
+weakly decreasing in own virtual cost. If \(\psi_i(c_i)\) is
+nondecreasing in \(c_i\), this gives the required monotonicity in own
+cost.
+
+The argument uses global optimality and a report-independent feasible
+set; it does not require convexity. For the full problem where \(S\) is
+also optimized, the same comparison applies if the feasible set and all
+other terms remain independent of the participant's report and the
+global optimum is selected. The fixed-\(S\) strict-convexity result alone
+does not by itself prove every Bayesian IC detail; the interim allocation
+and tie-breaking assumptions should be stated in a final mechanism proof.
+
+\section{Eliminating the total privacy parameter}
+
+\subsection{Why the fixed-\texorpdfstring{$S$}{S} sweep is not yet enough}
+
+For a fixed \(S\), the inner problem is convex and can be solved by KKT.
+But the platform must also choose \(S\). Solving the inner problem for
+one \(S\) does not solve the original joint optimization.
+
+The objective in \((w,S)\) has the form
+\begin{equation}
+  J(w,S)=Q(w)+\frac{2(n+1)}{S^2}
+  +S\sum_i\psi_iw_i,
+  \label{eq:Q-form}
+\end{equation}
+where
+\begin{equation}
+  Q(w)=(n+1)\left[
+    \sigma^2\sum_iw_i^2+(m(w)-\theta)^2
+  \right]
+  +\lambda\Delta^2(2m(w)-\mu_A-\mu_B)^2.
+\end{equation}
+
+For fixed \(w\), if \(\bar\psi(w)=\sum_i\psi_iw_i>0\), minimizing over
+\(S\) gives
+\begin{equation}
+  S^*(w)=
+  \left(\frac{4(n+1)}{\bar\psi(w)}\right)^{1/3}.
+  \label{eq:S-fixed-w}
+\end{equation}
+Substitution gives the reduced problem
+\begin{equation}
+  \min_{w\in\Delta_n}
+  Q(w)+\frac32[4(n+1)]^{1/3}
+  \left(\sum_i\psi_iw_i\right)^{2/3}.
+  \label{eq:reduced-w}
+\end{equation}
+The power \(2/3\) is concave, so this reduced objective is not
+automatically convex. This reparameterization is useful for understanding
+the outer problem, but it does not directly yield a convex optimization
+algorithm.
+
+\subsection{Envelope condition}
+
+Let
+\[
+\phi(S)=\min_{\substack{y_i\geq0\\\sum_i y_i=S}}J(y,S).
+\]
+The envelope theorem gives, at differentiability points,
+\begin{equation}
+  \phi'(S)
+  =
+  \sum_i\psi_iw_i^*(S)-\frac{4(n+1)}{S^3}.
+  \label{eq:envelope}
+\end{equation}
+An interior optimum therefore satisfies
+\begin{equation}
+  \boxed{
+  \sum_i\psi_iw_i^*(S)
+  =\frac{4(n+1)}{S^3}.
+  }
+  \label{eq:outer-stationarity}
+\end{equation}
+No uniqueness of this outer root is assumed. In particular, bisection
+would require a separate proof of a suitable monotonicity or sign-change
+property.
+
+\subsection{Two-variable reparameterization}
+
+The fixed-\(S\) KKT rule is
+\[
+y_i=\frac{(z-\psi_i-q a_i)_+}{\kappa},
+\quad
+\kappa=\frac{K}{S^2},
+\quad
+a_i=\frac{\mu_{g(i)}}{S},
+\quad
+K=2(n+1)\sigma^2.
+\]
+Set
+\[
+r=\frac qS,
+\qquad
+u_i(z,r)=(z-\psi_i-r\mu_{g(i)})_+,
+\qquad
+H(z,r)=\sum_i u_i(z,r).
+\]
+Then
+\begin{equation}
+  y_i=\frac{S^2}{K}u_i,
+  \qquad
+  S=\frac K H.
+  \label{eq:S-H}
+\end{equation}
+Define
+\begin{equation}
+  m(z,r)=
+  \frac{\sum_i\mu_{g(i)}u_i(z,r)}{H(z,r)}.
+\end{equation}
+The consistency relation \(q=Lm+q_0\), together with \(q=rS\),
+becomes
+\begin{equation}
+  \boxed{rK=(Lm(z,r)+q_0)H(z,r).}
+  \label{eq:consistency-zr}
+\end{equation}
+The outer stationarity condition becomes
+\begin{equation}
+  \boxed{
+  \frac{\sum_i\psi_i u_i(z,r)}{H(z,r)}
+  =\frac{4(n+1)H(z,r)^3}{K^3}.
+  }
+  \label{eq:outer-zr}
+\end{equation}
+This is a system of two equations in \(z,r\). Within a fixed active set,
+the positive-part expressions become affine, so the first equation is
+linear and the second is quartic after eliminating one variable.
+
+\section{A monotone two-threshold path}
+
+\subsection{Threshold coordinates}
+
+Define group-specific thresholds
+\begin{equation}
+  \tau_A=z-r\mu_A,
+  \qquad
+  \tau_B=z-r\mu_B.
+  \label{eq:thresholds}
+\end{equation}
+Then
+\begin{equation}
+  r=\frac{\tau_A-\tau_B}{\Delta},
+\end{equation}
+and
+\begin{equation}
+  u_i=(\tau_{g(i)}-\psi_i)_+.
+\end{equation}
+Define
+\begin{equation}
+  H_A(\tau_A)=\sum_{i\in A}(\tau_A-\psi_i)_+,
+  \qquad
+  H_B(\tau_B)=\sum_{i\in B}(\tau_B-\psi_i)_+.
+\end{equation}
+Thus \(H=H_A+H_B\).
+
+The consistency equation \eqref{eq:consistency-zr} is equivalent to
+\begin{equation}
+  \boxed{
+  F(\tau_A,\tau_B)
+  =
+  \frac K\Delta(\tau_A-\tau_B)
+  -c_AH_A(\tau_A)-c_BH_B(\tau_B)=0,
+  }
+  \label{eq:F}
+\end{equation}
+where
+\begin{equation}
+  c_A=L\mu_A+q_0,
+  \qquad
+  c_B=L\mu_B+q_0.
+\end{equation}
+
+\subsection{Sign structure}
+
+Using \(\theta=p_A\mu_A+p_B\mu_B\), with both proportions strictly
+positive, we have
+\begin{align}
+  c_A
+  &=2(n+1)(\mu_A-\theta)-4\lambda\Delta^3<0,
+  \label{eq:cA-sign}\\
+  c_B
+  &=2(n+1)(\mu_B-\theta)+4\lambda\Delta^3>0.
+  \label{eq:cB-sign}
+\end{align}
+These signs are central to the sweep result.
+
+\begin{proposition}[Unique monotone consistency path]
+Suppose \(\mu_A<\mu_B\), \(\theta\) is strictly between the group means,
+\(\sigma^2>0\), and \(\lambda\geq0\). Then, for every
+\(\tau_A\in\R\), there is exactly one \(\tau_B\in\R\) satisfying
+\eqref{eq:F}. The resulting function
+\(\tau_B=g(\tau_A)\) is continuous, strictly increasing, and
+piecewise linear.
+\end{proposition}
+
+\begin{proof}
+For fixed \(\tau_A\), the function \(F\) is continuous in \(\tau_B\).
+Its derivative wherever it exists is
+\[
+  \frac{\partial F}{\partial\tau_B}
+  =-\frac K\Delta-c_B k_B<0,
+\]
+where \(k_B\geq0\) is the number of active B participants. Thus it is
+strictly decreasing.
+
+As \(\tau_B\to-\infty\), \(H_B=0\) and
+\(F\to+\infty\). As \(\tau_B\to+\infty\), \(H_B\to+\infty\) and,
+because \(c_B>0\), \(F\to-\infty\). Hence there is exactly one root.
+
+Similarly, wherever derivatives exist,
+\[
+  \frac{\partial F}{\partial\tau_A}
+  =\frac K\Delta-c_Ak_A>0.
+\]
+Implicit differentiation therefore gives
+\[
+  \frac{d\tau_B}{d\tau_A}
+  =-\frac{F_{\tau_A}}{F_{\tau_B}}>0.
+\]
+Continuity follows from uniqueness and the continuous, strictly
+monotone dependence of \(F\) on \(\tau_B\). On any region where the
+active sets are fixed, \(H_A,H_B\) are affine, so \(F=0\) is an affine
+relation between the thresholds. Thus the path is piecewise linear.
+\end{proof}
+
+\begin{remark}[No participant leaves]
+Both thresholds increase along the path. Since a participant is active
+exactly when \(\tau_g>\psi_i\), participants enter in increasing
+virtual-cost order and never leave. Starting below all virtual costs,
+the path eventually activates all participants. There are at most \(n\)
+entry events and at most \(n+1\) segments.
+\end{remark}
+
+\subsection{Explicit segment equation}
+
+Within a segment, let \(k_A,k_B\) be the active counts and let
+\[
+P_A=\sum_{i\in\mathcal A_A}\psi_i,\qquad
+P_B=\sum_{i\in\mathcal A_B}\psi_i.
+\]
+Then
+\[
+H_A=k_A\tau_A-P_A,\qquad
+H_B=k_B\tau_B-P_B.
+\]
+Equation \eqref{eq:F} becomes
+\begin{equation}
+  A_0\tau_A+B_0\tau_B+C_0=0,
+  \label{eq:segment-line}
+\end{equation}
+where
+\begin{align}
+  A_0&=\frac K\Delta-c_Ak_A>0,\\
+  B_0&=-\frac K\Delta-c_Bk_B<0,\\
+  C_0&=c_AP_A+c_BP_B.
+\end{align}
+Consequently,
+\begin{equation}
+  \boxed{
+  \tau_B=s\tau_A+d,\qquad
+  s=-\frac{A_0}{B_0}>0,\qquad
+  d=-\frac{C_0}{B_0}.
+  }
+  \label{eq:segment-path}
+\end{equation}
+
+\subsection{Event-driven enumeration}
+
+Sort virtual costs separately:
+\[
+\psi_{A,(1)}\leq\cdots\leq\psi_{A,(n_A)},
+\qquad
+\psi_{B,(1)}\leq\cdots\leq\psi_{B,(n_B)}.
+\]
+Because both thresholds increase, the active participants in each
+group are always a prefix of its sorted list.
+
+For a current segment, the next events are:
+\begin{itemize}
+  \item A-entry:
+  \[
+    \tau_A=\psi_{A,(k_A+1)}.
+  \]
+  \item B-entry, using \(\tau_B=s\tau_A+d\):
+  \[
+    \tau_A=
+    \frac{\psi_{B,(k_B+1)}-d}{s}.
+  \]
+\end{itemize}
+Choose the smallest event parameter strictly ahead of the current
+position. If the two events coincide, update both groups simultaneously.
+Recompute the segment coefficients and continue.
+
+The path begins with both groups inactive and
+\(\tau_A=\tau_B\). Its first event is the smallest virtual cost across
+both groups. The path eventually reaches the region in which all
+participants are active.
+
+\section{Quartic equation on each segment}
+
+\subsection{Prefix-sum expressions}
+
+For a fixed active set, define
+\begin{equation}
+  R_A=\sum_{i\in\mathcal A_A}\psi_i^2,
+  \qquad
+  R_B=\sum_{i\in\mathcal A_B}\psi_i^2.
+\end{equation}
+The two quantities in the outer stationarity equation are
+\begin{align}
+  H
+  &=k_A\tau_A+k_B\tau_B-P_A-P_B,\\
+  U
+  &=P_A\tau_A+P_B\tau_B-R_A-R_B,
+  \label{eq:HU}
+\end{align}
+where
+\[
+  U=\sum_i\psi_i u_i.
+\]
+Using \(\tau_B=s\tau_A+d\), both are affine in \(\tau_A\):
+\begin{equation}
+  H=h_0+h_1\tau_A,\qquad
+  U=u_0+u_1\tau_A,
+\end{equation}
+with
+\begin{align}
+  h_0&=k_Bd-P_A-P_B,
+  &h_1&=k_A+k_Bs,\\
+  u_0&=P_Bd-R_A-R_B,
+  &u_1&=P_A+P_Bs.
+\end{align}
+
+\subsection{Quartic stationarity equation}
+
+The outer stationarity equation \eqref{eq:outer-zr} is
+\[
+  K^3U=4(n+1)H^4.
+\]
+Substituting the affine expressions gives
+\begin{equation}
+  \boxed{
+  4(n+1)(h_0+h_1\tau_A)^4
+  -K^3(u_0+u_1\tau_A)=0.
+  }
+  \label{eq:quartic}
+\end{equation}
+This polynomial has degree at most four.
+
+For each segment:
+\begin{enumerate}
+  \item Solve the polynomial for all real roots.
+  \item Retain only roots in the segment's threshold interval.
+  \item Require \(H>0\), so that \(S=K/H>0\).
+  \item Check the active and inactive inequalities.
+  \item Reconstruct
+  \[
+    S=\frac K H,\qquad
+    w_i=\frac{(\tau_{g(i)}-\psi_i)_+}{H},
+    \qquad
+    y_i=Sw_i.
+  \]
+\end{enumerate}
+All valid roots must be retained; there is no established result that
+there is at most one root per segment.
+
+\section{Global-optimality argument}
+
+\subsection{Existence of a finite minimizer}
+
+For the finite-minimizer argument, assume
+\begin{equation}
+  \psi_i\geq\psi_{\min}>0
+  \qquad\text{for every }i.
+  \label{eq:positive-psi}
+\end{equation}
+The objective can be written
+\[
+  J(w,S)=Q(w)+\frac{2(n+1)}{S^2}
+       +S\sum_i\psi_iw_i,
+\]
+where \(Q(w)\geq0\). Since \(w\) is in the probability simplex,
+\[
+  J(w,S)\geq
+  \frac{2(n+1)}{S^2}+S\psi_{\min}.
+\]
+The right-hand side tends to \(+\infty\) both as \(S\to0^+\) and
+as \(S\to+\infty\), uniformly over \(w\). The simplex is compact
+and the objective is continuous, so a global minimizer exists at a
+finite \(S^*>0\).
+
+\subsection{Why the fixed-\texorpdfstring{$S$}{S} KKT solution is globally optimal}
+
+For each fixed \(S\), the objective is strictly convex in \(w\)
+(equivalently in \(y\) subject to \(\sum_i y_i=S\)). Therefore its KKT
+conditions are necessary and sufficient, and its minimizer is unique.
+
+Every point on the consistency path with \(H>0\) defines
+\[
+  S=K/H,\qquad
+  w_i=u_i/H.
+\]
+The consistency equation ensures that the \(q\) used in the KKT rule
+equals \(Lm+q_0\). The normalization is satisfied because
+\[
+  \sum_i y_i
+  =\frac{S^2}{K}H
+  =S.
+\]
+Thus each such point gives the unique globally optimal allocation for
+its corresponding fixed \(S\).
+
+\subsection{Why the global optimum is among the quartic candidates}
+
+Let \((w^*,S^*)\) be a global minimizer. Under
+\eqref{eq:positive-psi}, it exists at a finite, positive \(S^*\).
+The unique fixed-\(S^*\) minimizer must satisfy the KKT conditions.
+Moreover, since \(S^*\) is an interior optimum of the outer problem,
+the envelope derivative vanishes:
+\[
+  \sum_i\psi_iw_i^*-\frac{4(n+1)}{(S^*)^3}=0.
+\]
+Hence its thresholds lie on the consistency path and satisfy the
+quartic stationarity equation on their active-set segment (or at a
+segment endpoint).
+
+Conversely, every valid quartic root on the path gives a feasible
+allocation satisfying the fixed-\(S\) KKT conditions and outer
+stationarity. Evaluating the original objective at all such candidates
+and selecting the smallest value therefore recovers the global
+minimizer.
+
+\begin{proposition}[Global candidate characterization]
+Under the assumptions of the monotone-path proposition and
+\(\psi_{\min}>0\), every global minimizer of
+\eqref{eq:full-w-objective} is represented by a valid real root of
+\eqref{eq:quartic} on one of the at most \(n+1\) active-set segments,
+including shared segment endpoints. Consequently, evaluating all valid
+candidates and selecting the one with the smallest original objective
+value gives the global optimum.
+\end{proposition}
+
+\begin{proof}
+Existence follows from coercivity. Fixed-\(S\) strict convexity makes
+the KKT allocation unique and globally optimal. The outer first-order
+condition is necessary at the finite interior global minimizer.
+The threshold-path proposition enumerates every possible active set
+along the unique consistency path, and the quartic equation is
+equivalent to the outer first-order condition on each segment.
+Therefore the global minimizer is included in the candidate set.
+Taking the smallest objective value among feasible candidates cannot
+produce a value below the global minimum, and the candidate set contains
+a global minimizer. Hence the smallest candidate value equals the
+global minimum.
+\end{proof}
+
+\subsection{Zero virtual costs and the limiting boundary}
+
+If all virtual costs are nonnegative but some are zero, the finite-\(S\)
+coercivity argument may fail. As \(S\to\infty\), bounded objective
+value forces all limiting weight to be placed on zero-virtual-cost
+participants. Define
+\[
+  Z_0=\{i:\psi_i=0\}.
+\]
+If \(Z_0\neq\varnothing\), the limiting boundary value is
+\begin{equation}
+  \boxed{
+  J_\infty
+  =
+  \min_{\substack{w_i\geq0,\ \sum_iw_i=1\\
+                  w_i=0\text{ for }i\notin Z_0}}
+  Q(w).
+  }
+  \label{eq:infinite-boundary}
+\end{equation}
+This value must be compared with all finite stationary candidates.
+The infimum may occur only in the limit \(S\to\infty\), rather than at
+a finite mechanism. If \(Z_0\) is empty, nonnegative virtual costs
+imply \(\psi_{\min}>0\), and the finite-minimizer argument applies.
+
+If negative virtual costs are possible, the analysis changes: the
+objective can become unbounded below as \(S\to\infty\) along a
+negative-cost participant. The current theorem therefore assumes
+nonnegative virtual costs.
+
+\section{Algorithm and complexity}
+
+\subsection{Event-driven algorithm}
+
+\begin{enumerate}
+  \item Sort virtual costs separately within groups A and B.
+  \item Initialize \(\tau_A=\tau_B\) below all virtual costs, with both
+        groups inactive.
+  \item Determine the first participant-entry event.
+  \item For each active-set segment:
+  \begin{enumerate}
+    \item Compute \(k_A,k_B,P_A,P_B,R_A,R_B\).
+    \item Compute the affine threshold relation
+          \(\tau_B=s\tau_A+d\).
+    \item Compute the next A-entry and B-entry events.
+    \item Construct the quartic \eqref{eq:quartic}.
+    \item Solve it and retain all valid roots in the current segment.
+    \item Advance to the next event; process simultaneous events together.
+  \end{enumerate}
+  \item Include segment endpoints and deduplicate candidates.
+  \item If zero virtual costs exist, compute the limiting value
+        \eqref{eq:infinite-boundary}.
+  \item Evaluate the original objective at every candidate and boundary
+        value; return the smallest.
+\end{enumerate}
+
+\subsection{Complexity}
+
+Sorting the two groups costs
+\[
+  O(n_A\log n_A+n_B\log n_B)=O(n\log n).
+\]
+Prefix sums of virtual costs and squared virtual costs can be built in
+\(O(n)\). Each participant enters once, so there are at most \(n\)
+events and \(n+1\) segments. A constant-degree quartic is solved a
+constant number of times per segment in the arithmetic-operation model.
+Candidate reconstruction and objective evaluation are linear in the
+number of participants if performed naively, giving a total of
+\[
+  \boxed{O(n\log n)}
+\]
+arithmetic operations, with \(O(n)\) memory.
+
+This is an algebraic complexity claim. A numerical implementation still
+needs a robust quartic root-isolation routine and careful treatment of
+near-coincident events, repeated roots, and degenerate polynomials.
+
+\section{Earlier fixed-\texorpdfstring{$S$}{S} active-set sweep}
+
+Before deriving the joint \((w,S)\) sweep, a separate active-set
+algorithm was developed for the fixed-\(S\) inner problem. It is useful
+both as an independent implementation route and as a way to validate
+the joint algorithm.
+
+For fixed \(S\), write
+\[
+  y_i(q)=\frac{(z(q)-qa_i-\psi_i)_+}{\kappa},
+  \qquad
+  \sum_i(z-qa_i-\psi_i)_+=\kappa S.
+\]
+The consistency condition is
+\[
+  q=Lm(q)+q_0,
+  \qquad
+  m(q)=\sum_i a_i y_i(q).
+\]
+Define
+\[
+  h(q)=q-Lm(q)-q_0.
+\]
+Within an active-set interval, \(m(q)\) is affine. In the two-group
+case, let the group coefficients be ordered \(a_1<a_2\). If the active
+participants are prefixes of sizes \(k_1,k_2\), define
+\[
+  P_g=\sum_{j=1}^{k_g}\psi_{g,(j)},\quad
+  k=k_1+k_2,\quad
+  A_1=k_1a_1+k_2a_2.
+\]
+Normalization gives
+\[
+  z(q)=\frac{\kappa S+P_1+P_2+qA_1}{k}.
+\]
+The group thresholds are
+\[
+  t_g(q)=z(q)-qa_g,
+\]
+with slopes
+\[
+  t_g'(q)=A_1/k-a_g.
+\]
+For \(a_1<a_2\), the group-1 threshold is nondecreasing and the
+group-2 threshold is nonincreasing. Hence group 1 participants enter
+in ascending virtual-cost order, while group 2 participants leave from
+the highest virtual-cost end. This produces a different event structure
+from the joint-\(S\) sweep, where both groups' thresholds increase.
+
+For a fixed active set, define
+\[
+  A_2=k_1a_1^2+k_2a_2^2,
+\]
+\[
+  B=\frac{A_1(\kappa S+P_1+P_2)}{k}
+    -(a_1P_1+a_2P_2),
+\qquad
+  C=\frac{A_1^2}{k}-A_2\leq0.
+\]
+Then
+\[
+  m(q)=\frac{B+Cq}{\kappa},
+\]
+and the consistency root is
+\[
+  q^*=\frac{\kappa q_0+LB}{\kappa-LC}.
+\]
+The event sweep can locate the interval containing this root, after
+which \(z\) and \(y_i\) are recovered.
+
+This fixed-\(S\) method is a candidate \(O(n\log n)\) inner solver.
+Its event logic, especially initialization, simultaneous events, and
+the cases in which one group is empty, should be independently tested.
+It does not optimize over \(S\); the joint two-threshold method above
+does.
+
+\section{Mechanism-design implications and limitations}
+
+\subsection{IC implications}
+
+The fairness term is platform-only, so the participant utility and
+payment identity are unchanged. Under independent types, regular
+(non-decreasing) virtual costs, the original utility specification,
+and a pointwise globally optimal allocation rule, monotonicity in own
+virtual cost is supported by the two-optimum comparison. This is the
+key reason the pointwise optimization can potentially be used in the
+Bayesian mechanism.
+
+A final mechanism theorem should still state carefully:
+\begin{itemize}
+  \item the type distributions and independence assumptions;
+  \item regularity of virtual costs;
+  \item whether the pointwise optimizer is unique (it is unique for fixed
+        \(S\), while the full joint problem may have multiple global
+        minimizers);
+  \item how ties between global minimizers are resolved;
+  \item the exact interim allocation and payment definitions.
+\end{itemize}
+The algorithmic optimization result alone is not a complete Bayesian
+IC/IR proof.
+
+\subsection{Estimator optimality versus optimization optimality}
+
+There are two distinct claims.
+
+\paragraph{Claim 1: global optimization within the chosen estimator class.}
+The algorithm minimizes the fairness-augmented platform objective over
+all linear weighted estimators with Laplace noise of the form
+\eqref{eq:estimator}, subject to the stated allocation structure.
+This is an optimization statement about a restricted mechanism class.
+
+\paragraph{Claim 2: near-optimality among all DP estimators.}
+This would compare the chosen estimator with every admissible central-DP
+mechanism, including nonlinear estimators and mechanisms using other
+noise distributions or data-dependent procedures. The optimization
+algorithm does not establish this claim.
+
+A possible formal target is a heterogeneous minimax risk. Let
+\[
+  \mathcal P_{\mathrm{het}}
+  =\mathcal P_A^{n_A}\times\mathcal P_B^{n_B}
+\]
+be a specified class of group distributions, and let
+\(\mathcal Q_{\mathrm{DP}}(\epsilon)\) be the class of all central-DP
+estimators satisfying the relevant privacy constraints. Define
+\begin{equation}
+  R_{\mathrm{all}}^*(\epsilon)
+  =
+  \inf_{\mathcal M\in\mathcal Q_{\mathrm{DP}}(\epsilon)}
+  \sup_{(P_A,P_B)\in\mathcal P_{\mathrm{het}}}
+  \E\left[
+    \bigl(\mathcal M(X)-\theta(P_A,P_B)\bigr)^2
+  \right].
+\end{equation}
+One would then seek an upper bound for the proposed estimator and a
+matching or comparable lower bound for \(R_{\mathrm{all}}^*\).
+
+The original paper's near-optimality result is established for its
+original statistical setting (iid observations from a common
+distribution and its specified minimax class). It does not automatically
+transfer to two heterogeneous group distributions, a population-weighted
+target, and a fairness-augmented objective. A new lower-bound argument
+and a precise definition of the fairness-aware risk criterion would be
+needed.
+
+\subsection{What the current result does and does not establish}
+
+\begin{center}
+\begin{tabular}{p{0.43\textwidth}p{0.48\textwidth}}
+\toprule
+\textbf{Established by the current derivation} &
+\textbf{Not established yet}\\
+\midrule
+Fixed-\(S\) objective is strictly convex and has a unique allocation. &
+Near-optimality among all central-DP estimators.\\
+The two-threshold consistency path is unique, increasing, and
+piecewise linear under the stated assumptions. &
+A statistical minimax lower bound for the heterogeneous two-group model.\\
+There are at most \(n\) participant-entry events. &
+A complete end-to-end numerical stability guarantee.\\
+The outer stationarity equation is quartic on each segment. &
+A complete mechanism theorem without specifying tie-breaking and all
+Bayesian assumptions.\\
+With positive virtual costs, the valid stationary candidates contain
+the global optimum. &
+Extension to unequal within-group variances or more than two groups.\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Compact conceptual summary}
+
+The research extension can be understood as follows.
+
+\begin{enumerate}
+  \item The original paper chooses privacy allocations to balance
+        estimation error and participant virtual costs.
+  \item We introduce two groups with different means and penalize the
+        disparity between their conditional MSEs.
+  \item This fairness term changes the KKT allocation rule: participants
+        now face group-dependent thresholds.
+  \item At fixed total privacy loss \(S\), the allocation problem remains
+        strictly convex.
+  \item To optimize \(S\) as well, we combine KKT consistency with the
+        outer envelope condition.
+  \item The consistency equation couples the two thresholds. The
+        population-mean assumption gives opposite signs for the two
+        group coefficients, making the threshold path unique and
+        monotone.
+  \item Each participant enters once, so there are only linearly many
+        active-set segments.
+  \item On each segment, the outer stationarity condition is quartic.
+        Solving these quartics and comparing valid candidates gives a
+        global optimizer under the positive-virtual-cost assumption.
+  \item This establishes efficient optimization within the
+        linear-Laplace class. It does not establish minimax
+        near-optimality among all DP mechanisms.
+\end{enumerate}
+
+\end{document}
