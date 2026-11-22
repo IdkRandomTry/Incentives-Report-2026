@@ -1,6 +1,7 @@
 """Quick unit test for core solver."""
 import sys
-sys.path.insert(0, '.')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fair_estimation.core import GroupParams, solve, compute_metrics
 from fair_estimation.costs import sample_costs, group_costs

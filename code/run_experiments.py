@@ -18,8 +18,9 @@ import argparse
 import time
 from pathlib import Path
 
-# -- Make sure the codes directory is importable --
-sys.path.insert(0, str(Path(__file__).parent))
+# -- Make sure the code directory is importable --
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR))
 
 import matplotlib
 matplotlib.use('Agg')    # non-interactive backend for file output
@@ -34,11 +35,11 @@ from fair_estimation.plots import (
 )
 
 # ---------------------------------------------------------------------------
-# Output directories
+# Output directories (resolve to project root)
 # ---------------------------------------------------------------------------
-BASE    = Path(__file__).parent
-RESULTS = BASE / 'results'
-FIGS    = BASE / 'figures'
+PROJECT_ROOT = SCRIPT_DIR.parent if (SCRIPT_DIR.parent / 'results').exists() or (SCRIPT_DIR.parent / 'figures').exists() else SCRIPT_DIR
+RESULTS = PROJECT_ROOT / 'results'
+FIGS    = PROJECT_ROOT / 'figures'
 for d in [RESULTS, FIGS]:
     d.mkdir(exist_ok=True)
 

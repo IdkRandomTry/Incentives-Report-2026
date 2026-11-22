@@ -1,8 +1,11 @@
+from pathlib import Path
 import pandas as pd
+
+RESULTS_DIR = Path(__file__).resolve().parent.parent / 'results'
 
 def format_all_tables():
     # Table 1: Exp 1.1
-    df1 = pd.read_csv('results/exp_1_1.csv')
+    df1 = pd.read_csv(RESULTS_DIR / 'exp_1_1.csv')
     print('=== TABLE 1 (Exp 1.1) ===')
     print(r'''\begin{table}[htbp]
 \centering
@@ -31,7 +34,7 @@ Estimator & $\widehat{m}$ & Disparity & $\MSE_{\mathrm{pop}}$ & Payment & Acquir
 \end{table}''')
 
     # Table 2: Exp 1.2
-    df2 = pd.read_csv('results/exp_1_2.csv')
+    df2 = pd.read_csv(RESULTS_DIR / 'exp_1_2.csv')
     print('\n=== TABLE 2 (Exp 1.2) ===')
     print(r'''\begin{table}[htbp]
 \centering
@@ -53,7 +56,7 @@ $\lambda$ & $\widehat{m}$ & Disparity & $\MSE_{\mathrm{pop}}$ & $\MSE_A$ & $\MSE
 \end{table}''')
 
     # Table 3: Exp 2.1.1
-    df3 = pd.read_csv('results/exp_2_1_1.csv')
+    df3 = pd.read_csv(RESULTS_DIR / 'exp_2_1_1.csv')
     print('\n=== TABLE 3 (Exp 2.1.1) ===')
     print(r'''\begin{table}[htbp]
 \centering
@@ -80,7 +83,7 @@ Estimator & $\widehat{m}$ & Disparity & $\MSE_{\mathrm{pop}}$ & Payment & Acquir
 \end{table}''')
 
     # Table 4: Exp 2.1.2
-    df4 = pd.read_csv('results/exp_2_1_2.csv')
+    df4 = pd.read_csv(RESULTS_DIR / 'exp_2_1_2.csv')
     print('\n=== TABLE 4 (Exp 2.1.2) ===')
     print(r'''\begin{table}[htbp]
 \centering
@@ -109,7 +112,7 @@ Estimator & $\widehat{m}$ & Disparity & $\MSE_{\mathrm{pop}}$ & Payment & Acquir
 \end{table}''')
 
     # Table 5: Exp 2.2
-    df5 = pd.read_csv('results/exp_2_2.csv')
+    df5 = pd.read_csv(RESULTS_DIR / 'exp_2_2.csv')
     print('\n=== TABLE 5 (Exp 2.2) ===')
     print(r'''\begin{table}[htbp]
 \centering
